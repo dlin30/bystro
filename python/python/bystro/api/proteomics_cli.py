@@ -12,7 +12,6 @@ from enum import Enum
 
 UPLOAD_PROTEIN_ENDPOINT = "/api/jobs/proteomics/"
 GET_ANNOTATION = "/api/jobs/:id"
-GET_UUID = "/api/jobs/generateJobID"
 HTTP_STATUS_OK = 200
 ONE_HOUR_IN_SECONDS = 60 * 60
 
