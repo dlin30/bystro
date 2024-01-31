@@ -280,7 +280,7 @@ def login(args: argparse.Namespace, print_result=True) -> CachedAuth:
     return state
 
 
-def authenticate(args) -> tuple[CachedAuth, dict]:
+def authenticate(dir_path: str) -> tuple[CachedAuth, dict]:
     """
     Authenticates the user and returns the url, auth header, and email.
 
@@ -294,7 +294,7 @@ def authenticate(args) -> tuple[CachedAuth, dict]:
     tuple[CachedAuth, dict]
         The cached auth credentials and auth header
     """
-    state = load_state(args.dir)
+    state = load_state(dir_path)
 
     if not state:
         raise ValueError("\n\nYou are not logged in. Please login first.\n")
@@ -322,7 +322,7 @@ def get_jobs(
         The response from the server.
 
     """
-    state, auth_header = authenticate(args)
+    state, auth_header = authenticate(args.dir)
     url = state.url + "/api/jobs"
     job_type = args.type
     job_id = args.id
@@ -385,7 +385,7 @@ def create_job(args: argparse.Namespace, print_result=True) -> dict:
     dict
         The newly created job.
     """
-    state, auth_header = authenticate(args)
+    state, auth_header = authenticate(args.dir)
     url = state.url + "/api/jobs/upload/"
 
     payload = {
@@ -450,7 +450,7 @@ def get_user(args: argparse.Namespace, print_result=True) -> UserProfile:
     if print_result:
         print("\n\nFetching user profile\n")
 
-    state, auth_header = authenticate(args)
+    state, auth_header = authenticate(args.dir)
 
     response = requests.get(state.url + "/api/user/me", headers=auth_header, timeout=30)
 
@@ -495,7 +495,7 @@ def query(args: argparse.Namespace) -> None:
         The queried results
     """
 
-    state, auth_header = authenticate(args)
+    state, auth_header = authenticate(args.dir)
 
     try:
         query_payload = {
