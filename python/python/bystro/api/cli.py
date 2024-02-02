@@ -132,13 +132,13 @@ def _fq_host(args: argparse.Namespace) -> str:
     return f"{args.host}:{args.port}"
 
 
-def load_state(state_dir: str) -> CachedAuth | None:
+def load_state(bystro_token_path: str) -> CachedAuth | None:
     """
     Loads the authentication state from the state directory.
 
     Parameters
     ----------
-    state_dir : str
+    bystro_token_path : str
         The directory where the authentication state is saved.
 
     Returns
@@ -146,7 +146,7 @@ def load_state(state_dir: str) -> CachedAuth | None:
     CachedAuth | None
         The authentication state, or None if the state file doesn't exist.
     """
-    path = os.path.join(state_dir, STATE_FILE)
+    path = os.path.join(bystro_token_path, STATE_FILE)
 
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -155,7 +155,7 @@ def load_state(state_dir: str) -> CachedAuth | None:
     return None
 
 
-def save_state(data: CachedAuth, state_dir: str, print_result=True) -> None:
+def save_state(data: CachedAuth, bystro_token_path: str, print_result=True) -> None:
     """
     Saves the authentication state to a file.
 
@@ -163,7 +163,7 @@ def save_state(data: CachedAuth, state_dir: str, print_result=True) -> None:
     ----------
     data : CachedAuth
         The data to save.
-    state_dir : str
+    bystro_token_path : str
         The directory where the authentication state will be saved.
     print_result : bool, optional
         Whether to print the result of the save operation, by default True.
@@ -172,10 +172,10 @@ def save_state(data: CachedAuth, state_dir: str, print_result=True) -> None:
     --------
     None
     """
-    if not os.path.exists(state_dir):
-        os.makedirs(state_dir, exist_ok=True)
+    if not os.path.exists(bystro_token_path):
+        os.makedirs(bystro_token_path, exist_ok=True)
 
-    save_path = os.path.join(state_dir, STATE_FILE)
+    save_path = os.path.join(bystro_token_path, STATE_FILE)
     encoded_data = mjson.encode(data).decode("utf-8")
 
     with open(save_path, "w", encoding="utf-8") as f:
