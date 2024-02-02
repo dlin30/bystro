@@ -7,6 +7,7 @@ import requests
 from bystro.api.cli import DEFAULT_DIR, authenticate, login
 from msgspec import json as mjson
 from enum import Enum
+import json
 
 # ruff: noqa: T201
 
@@ -30,16 +31,16 @@ def _package_filename(filename: str) -> tuple[str, tuple[str, BinaryIO, str]]:
 
 
 class DatasetTypes(Enum):
-    "fragpipe-TMT"
-    "somascan"
+    fragpipe_TMT = "fragpipe-TMT"
+    somascan = "somascan"
 
 
 def upload_proteomics_dataset(
     protein_abundance_file: str,
-    experiment_annotation_file: str,
-    annotation_job_id: str,
-    proteomics_dataset_type: DatasetTypes,
-    user_dir: str,
+    experiment_annotation_file: str = None,
+    annotation_job_id: str = None,
+    proteomics_dataset_type: str = "fragpipe_TMT",
+    user_dir: str = DEFAULT_DIR,
     print_result: bool = True,
 ) -> dict[str, Any]:
     """
@@ -74,9 +75,10 @@ def upload_proteomics_dataset(
             return {}
 
     state, auth_header = authenticate(user_dir)
+    url = state.url + UPLOAD_PROTEIN_ENDPOINT
 
     if annotation_job_id:
-        annotation_url = str(state.url / Path(GET_ANNOTATION.replace(":id", annotation_job_id)))
+        annotation_url = state.url + GET_ANNOTATION.replace(":id", annotation_job_id)
         annotation_response = requests.get(annotation_url, headers=auth_header)
 
         if annotation_response.status_code != HTTP_STATUS_OK:
@@ -85,28 +87,26 @@ def upload_proteomics_dataset(
             )
             return {}
 
-    url = str(state.url / Path(UPLOAD_PROTEIN_ENDPOINT))
-    payload = {
-        "job": mjson.encode(
-            {
-                "protein_abundance_file": Path(protein_abundance_file),
-                "proteomics_dataset_type": proteomics_dataset_type,
-            }
-        )
+    job_payload = {
+        "protein_abundance_file": Path(protein_abundance_file).name,
+        "proteomics_dataset_type": proteomics_dataset_type.value,
+        "assembly": "N/A",
     }
 
-    files_to_upload = [protein_abundance_file, experiment_annotation_file]
-    files = [_package_filename(filename) for filename in files_to_upload]
+    files = [_package_filename(protein_abundance_file)]
+    if experiment_annotation_file:
+        files.append(_package_filename(experiment_annotation_file))
 
     response = requests.post(
-        url, headers=auth_header, data=payload, files=files, timeout=ONE_HOUR_IN_SECONDS
+        url, headers=auth_header, files=files, data={"job": json.dumps(job_payload)}
     )
 
     if response.status_code == HTTP_STATUS_OK:
         proteomics_response_data = response.json()
+        print("\nProteomics Upload response:", json.dumps(proteomics_response_data, indent=4))
         proteomics_job_id = proteomics_response_data.get("_id")
 
-        update_annotation_url = str(state.url / Path(GET_ANNOTATION.replace(":id", annotation_job_id)))
+        update_annotation_url = state.url + GET_ANNOTATION.replace(":id", annotation_job_id)
         update_annotation_payload = {"proteomicsID": proteomics_job_id}
         update_annotation_response = requests.patch(
             update_annotation_url, headers=auth_header, json=update_annotation_payload
@@ -118,7 +118,7 @@ def upload_proteomics_dataset(
             )
 
         update_proteomics_url = str(
-            state.url / Path(UPLOAD_PROTEIN_ENDPOINT + proteomics_job_id)
+            state.url + UPLOAD_PROTEIN_ENDPOINT + proteomics_job_id
         )
         update_proteomics_payload = {"annotationID": annotation_job_id}
         update_proteomics_response = requests.patch(
@@ -131,16 +131,13 @@ def upload_proteomics_dataset(
             )
 
         final_response = {"annotationID": annotation_job_id, "proteomicsID": proteomics_job_id}
-
         if print_result:
             print("\nLink established successfully.\n")
-            print(mjson.format(final_response, indent=4))
+            print(json.dumps(final_response, indent=4))
 
         return final_response
-
     else:
-        msg = f"Proteomics job creation failed with response status: {response.status_code}. Error: \n{response.text}\n"
-        raise RuntimeError(msg)
+        raise Exception(f"Upload failed with status code {response.status_code}: {response.text}")
 
 
 #  subparsers is a public class of argparse but is named with a
@@ -182,22 +179,40 @@ def _add_upload_proteomics_dataset_subparser(
         "--experiment-annotation-file",
         required=False,
         type=str,
-        help="Experiment annotation file (currently only Fragpipe format accepted.)",
+        help="Experiment annotation file (optional)",
+    )
+    upload_proteomics_dataset_parser.add_argument(
+        "--annotation-job-id",
+        required=False,
+        help="Annotation job ID to associate with the proteomics dataset (optional)."
+    )
+    upload_proteomics_dataset_parser.add_argument(
+        "--proteomics-dataset-type",
+        type=str,
+        default="fragpipe_TMT",
+        help="Type of proteomics dataset (default: fragpipe-TMT).",
     )
     upload_proteomics_dataset_parser.add_argument(
         "--dir", default=DEFAULT_DIR, help="Where Bystro API login state is saved"
     )
 
     def wrapper(args):
+        sanitized_type = args.proteomics_dataset_type.replace('-', '_')
+        try:
+            dataset_type_enum = DatasetTypes[sanitized_type]
+        except KeyError:
+            raise ValueError(f"Invalid proteomics dataset type: {args.proteomics_dataset_type}")
+
         upload_proteomics_dataset(
             args.protein_abundance_file,
             args.experiment_annotation_file,
-            DatasetTypes[args.proteomics_dataset_type.upper()],
+            args.annotation_job_id,
+            dataset_type_enum,
             args.dir,
             True,
         )
 
-    upload_proteomics_dataset_parser.set_defaults(func=wrapper, command="upload-proteomics-dataset")
+    upload_proteomics_dataset_parser.set_defaults(func=wrapper)
 
 
 def _configure_parser() -> argparse.ArgumentParser:
