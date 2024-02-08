@@ -7,7 +7,7 @@ from msgspec import json as mjson
 
 def test_upload_proteomics_dataset(mocker):
     mocker.patch(
-        "bystro.proteomics.proteomics_cli.authenticate",
+        "bystro.api.proteomics_cli.authenticate",
         return_value=(
             EXAMPLE_CACHED_AUTH,
             "localhost:8080",
