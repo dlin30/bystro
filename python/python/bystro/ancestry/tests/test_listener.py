@@ -1,3 +1,4 @@
+from msgspec import json
 import pyarrow.feather as feather  # type: ignore
 
 from bystro.ancestry.listener import (
@@ -7,7 +8,7 @@ from bystro.ancestry.listener import (
     completed_msg_fn,
     SubmittedJobMessage,
     AncestryJobCompleteMessage,
-    AncestryResults
+    AncestryResults,
 )
 from bystro.ancestry.tests.test_inference import (
     ANCESTRY_MODEL,
@@ -24,7 +25,9 @@ handler_fn = handler_fn_factory(ANCESTRY_MODEL)
 
 def test_submit_fn():
     ancestry_job_data = AncestryJobData(
-        submissionID="my_submission_id2", dosage_matrix_path="some_dosage.feather"
+        submission_id="my_submission_id2",
+        dosage_matrix_path="some_dosage.feather",
+        out_dir="/path/to/some/dir",
     )
     submitted_job_message = submit_msg_fn(ancestry_job_data)
 
@@ -37,11 +40,13 @@ def test_handler_fn_happy_path(tmpdir):
 
     feather.write_feather(FAKE_GENOTYPES_DOSAGE_MATRIX.to_table(), str(f1))
 
-    progress_message = ProgressMessage(submissionID="my_submission_id")
+    progress_message = ProgressMessage(submission_id="my_submission_id")
     publisher = ProgressPublisher(
         host="127.0.0.1", port=1234, queue="my_queue", message=progress_message
     )
-    ancestry_job_data = AncestryJobData(submissionID="my_submission_id2", dosage_matrix_path=f1)
+    ancestry_job_data = AncestryJobData(
+        submission_id="my_submission_id2", dosage_matrix_path=f1, out_dir=str(tmpdir)
+    )
     ancestry_response = handler_fn(publisher, ancestry_job_data)
 
     assert isinstance(ancestry_response, AncestryResults)
@@ -55,9 +60,9 @@ def test_handler_fn_happy_path(tmpdir):
     assert samples_seen == expected_samples
 
 
-def test_completion_fn():
+def test_completion_fn(tmpdir):
     ancestry_job_data = AncestryJobData(
-        submissionID="my_submission_id2", dosage_matrix_path="some_dosage.feather"
+        submission_id="my_submission_id2", dosage_matrix_path="some_dosage.feather", out_dir=str(tmpdir)
     )
 
     ancestry_results, _ = _infer_ancestry()
@@ -65,3 +70,41 @@ def test_completion_fn():
     completed_msg = completed_msg_fn(ancestry_job_data, ancestry_results)
 
     assert isinstance(completed_msg, AncestryJobCompleteMessage)
+
+
+def test_completion_message():
+    ancestry_job_data = AncestryJobCompleteMessage(
+        submission_id="my_submission_id2", result_path="some_dosage.feather"
+    )
+
+    serialized_values = json.encode(ancestry_job_data)
+    expected_value = {
+        "submissionId": "my_submission_id2",
+        "event": "completed",
+        "resultPath": "some_dosage.feather",
+    }
+    serialized_expected_value = json.encode(expected_value)
+
+    assert serialized_values == serialized_expected_value
+
+    deserialized_values = json.decode(serialized_expected_value, type=AncestryJobCompleteMessage)
+    assert deserialized_values == ancestry_job_data
+
+
+def test_job_data_from_beanstalkd():
+    ancestry_job_data = AncestryJobData(
+        submission_id="my_submission_id2", dosage_matrix_path="some_dosage.feather", out_dir="/foo"
+    )
+
+    serialized_values = json.encode(ancestry_job_data)
+    expected_value = {
+        "submissionId": "my_submission_id2",
+        "dosageMatrixPath": "some_dosage.feather",
+        "outDir": "/foo",
+    }
+    serialized_expected_value = json.encode(expected_value)
+
+    assert serialized_values == serialized_expected_value
+
+    deserialized_values = json.decode(serialized_expected_value, type=AncestryJobData)
+    assert deserialized_values == ancestry_job_data

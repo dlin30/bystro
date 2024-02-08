@@ -1,11 +1,14 @@
 """Provide a worker for the ancestry model."""
+
 import argparse
-import logging
 from collections.abc import Callable
+import logging
 from pathlib import Path
 
 import boto3  # type: ignore
+import msgspec
 import pandas as pd
+import pyarrow.dataset as ds  # type: ignore
 from ruamel.yaml import YAML
 from skops.io import load as skops_load  # type: ignore
 
@@ -13,8 +16,6 @@ from bystro.ancestry.ancestry_types import AncestryResults
 from bystro.ancestry.inference import AncestryModel, infer_ancestry
 from bystro.beanstalkd.messages import BaseMessage, CompletedJobMessage, SubmittedJobMessage
 from bystro.beanstalkd.worker import ProgressPublisher, QueueConf, get_progress_reporter, listen
-
-import pyarrow.dataset as ds  # type: ignore
 
 logging.basicConfig(
     filename="ancestry_listener.log",
@@ -44,16 +45,28 @@ def _get_model_from_s3() -> AncestryModel:
     return AncestryModel(pca_loadings_df, rfc)
 
 
-class AncestryJobData(BaseMessage, frozen=True):
-    """The input data expected from the job json message."""
+class AncestryJobData(BaseMessage, frozen=True, rename="camel"):
+    """
+    The expected JSON message for the Ancestry job.
+
+    Parameters
+    ----------
+    submission_id: str
+        The unique identifier for the job.
+    dosage_matrix_path: str
+        The path to the dosage matrix file.
+    out_dir: str
+        The directory to write the results to.
+    """
 
     dosage_matrix_path: str
+    out_dir: str
 
 
-class AncestryJobCompleteMessage(CompletedJobMessage, frozen=True, kw_only=True):
+class AncestryJobCompleteMessage(CompletedJobMessage, frozen=True, kw_only=True, rename="camel"):
     """The returned JSON message expected by the API server"""
 
-    results: AncestryResults
+    result_path: str
 
 
 def _load_queue_conf(queue_conf_path: str) -> QueueConf:
@@ -87,7 +100,7 @@ def handler_fn_factory(
 def submit_msg_fn(ancestry_job_data: AncestryJobData) -> SubmittedJobMessage:
     """Acknowledge receipt of AncestryJobData."""
     logger.debug("entering submit_msg_fn: %s", ancestry_job_data)
-    return SubmittedJobMessage(ancestry_job_data.submissionID)
+    return SubmittedJobMessage(ancestry_job_data.submission_id)
 
 
 def completed_msg_fn(
@@ -96,7 +109,16 @@ def completed_msg_fn(
     """Send job complete message."""
     logger.debug("entering completed_msg_fn: %s", ancestry_job_data)
 
-    return AncestryJobCompleteMessage(submissionID=ancestry_job_data.submissionID, results=results)
+    json_data = msgspec.json.encode(results)
+
+    out_path = str(Path(ancestry_job_data.out_dir) / "ancestry_results.json")
+
+    with open(out_path, "wb") as f:
+        f.write(json_data)
+
+    return AncestryJobCompleteMessage(
+        submission_id=ancestry_job_data.submission_id, result_path=out_path
+    )
 
 
 def main(ancestry_model: AncestryModel, queue_conf: QueueConf) -> None:
