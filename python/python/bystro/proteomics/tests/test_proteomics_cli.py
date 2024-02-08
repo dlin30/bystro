@@ -1,4 +1,3 @@
-from argparse import Namespace
 from pathlib import Path
 
 from bystro.api.tests.test_cli import EXAMPLE_CACHED_AUTH
@@ -26,12 +25,11 @@ def test_upload_proteomics_dataset(mocker):
     protein_abundance_filename = str(Path(__file__).parent / "protein_abundance_file.tsv")
     experiment_annotation_filename = str(Path(__file__).parent / "experiment_annotation_file.tsv")
 
-    args = Namespace(
+    response = upload_proteomics_dataset(
         protein_abundance_file=protein_abundance_filename,
         experiment_annotation_file=experiment_annotation_filename,
         dir="./",
     )
-    response = upload_proteomics_dataset(args)
 
     assert response == {"success": True}
 
