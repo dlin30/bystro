@@ -28,7 +28,7 @@ def test_upload_proteomics_dataset(mocker):
     response = upload_proteomics_dataset(
         protein_abundance_file=protein_abundance_filename,
         experiment_annotation_file=experiment_annotation_filename,
-        dir="./",
+        annotation_job_id="123",
     )
 
     assert response == {"success": True}
