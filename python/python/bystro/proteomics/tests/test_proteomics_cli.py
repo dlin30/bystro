@@ -28,10 +28,11 @@ def test_upload_proteomics_dataset(mocker):
     response = upload_proteomics_dataset(
         protein_abundance_file=protein_abundance_filename,
         experiment_annotation_file=experiment_annotation_filename,
-        annotation_job_id="123",
+        annotationID="123",
+        proteomicsID="321"
     )
 
-    assert response == {"success": True}
+    assert response == {"annotationID": "123", "proteomicsID": "321"}
 
 
 def test__configure_parser():
