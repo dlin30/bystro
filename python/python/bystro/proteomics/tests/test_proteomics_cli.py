@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from bystro.api.tests.test_cli import EXAMPLE_CACHED_AUTH
-from bystro.api.proteomics_cli import _configure_parser, upload_proteomics_dataset
+from bystro.cli.tests.test_cli import EXAMPLE_CACHED_AUTH
+from bystro.api.proteomics import _configure_parser, upload_proteomics_dataset
 from msgspec import json as mjson
 
 
