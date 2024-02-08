@@ -132,13 +132,13 @@ def _fq_host(args: argparse.Namespace) -> str:
     return f"{args.host}:{args.port}"
 
 
-def load_state(state_dir: str) -> CachedAuth | None:
+def load_state(bystro_credentials_dir: str = DEFAULT_DIR) -> CachedAuth | None:
     """
     Loads the authentication state from the state directory.
 
     Parameters
     ----------
-    state_dir : str
+    bystro_credentials_dir : str
         The directory where the authentication state is saved.
 
     Returns
@@ -146,7 +146,7 @@ def load_state(state_dir: str) -> CachedAuth | None:
     CachedAuth | None
         The authentication state, or None if the state file doesn't exist.
     """
-    path = os.path.join(state_dir, STATE_FILE)
+    path = os.path.join(bystro_credentials_dir, STATE_FILE)
 
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -155,7 +155,7 @@ def load_state(state_dir: str) -> CachedAuth | None:
     return None
 
 
-def save_state(data: CachedAuth, state_dir: str, print_result=True) -> None:
+def save_state(data: CachedAuth, bystro_credentials_dir: str = DEFAULT_DIR, print_result=True) -> None:
     """
     Saves the authentication state to a file.
 
@@ -163,7 +163,7 @@ def save_state(data: CachedAuth, state_dir: str, print_result=True) -> None:
     ----------
     data : CachedAuth
         The data to save.
-    state_dir : str
+    bystro_credentials_dir : str
         The directory where the authentication state will be saved.
     print_result : bool, optional
         Whether to print the result of the save operation, by default True.
@@ -172,10 +172,10 @@ def save_state(data: CachedAuth, state_dir: str, print_result=True) -> None:
     --------
     None
     """
-    if not os.path.exists(state_dir):
-        os.makedirs(state_dir, exist_ok=True)
+    if not os.path.exists(bystro_credentials_dir):
+        os.makedirs(bystro_credentials_dir, exist_ok=True)
 
-    save_path = os.path.join(state_dir, STATE_FILE)
+    save_path = os.path.join(bystro_credentials_dir, STATE_FILE)
     encoded_data = mjson.encode(data).decode("utf-8")
 
     with open(save_path, "w", encoding="utf-8") as f:
@@ -280,7 +280,7 @@ def login(args: argparse.Namespace, print_result=True) -> CachedAuth:
     return state
 
 
-def authenticate(args) -> tuple[CachedAuth, dict]:
+def authenticate(dir_path: str) -> tuple[CachedAuth, dict]:
     """
     Authenticates the user and returns the url, auth header, and email.
 
@@ -294,7 +294,7 @@ def authenticate(args) -> tuple[CachedAuth, dict]:
     tuple[CachedAuth, dict]
         The cached auth credentials and auth header
     """
-    state = load_state(args.dir)
+    state = load_state(dir_path)
 
     if not state:
         raise ValueError("\n\nYou are not logged in. Please login first.\n")
@@ -322,7 +322,7 @@ def get_jobs(
         The response from the server.
 
     """
-    state, auth_header = authenticate(args)
+    state, auth_header = authenticate(args.dir)
     url = state.url + "/api/jobs"
     job_type = args.type
     job_id = args.id
@@ -385,7 +385,7 @@ def create_job(args: argparse.Namespace, print_result=True) -> dict:
     dict
         The newly created job.
     """
-    state, auth_header = authenticate(args)
+    state, auth_header = authenticate(args.dir)
     url = state.url + "/api/jobs/upload/"
 
     payload = {
@@ -450,7 +450,7 @@ def get_user(args: argparse.Namespace, print_result=True) -> UserProfile:
     if print_result:
         print("\n\nFetching user profile\n")
 
-    state, auth_header = authenticate(args)
+    state, auth_header = authenticate(args.dir)
 
     response = requests.get(state.url + "/api/user/me", headers=auth_header, timeout=30)
 
@@ -495,7 +495,7 @@ def query(args: argparse.Namespace) -> None:
         The queried results
     """
 
-    state, auth_header = authenticate(args)
+    state, auth_header = authenticate(args.dir)
 
     try:
         query_payload = {
