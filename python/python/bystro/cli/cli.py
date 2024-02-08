@@ -478,22 +478,23 @@ def main():
     )
     query_parser.set_defaults(func=query)
     proteomics_parser = subparsers.add_parser(
-        'upload-proteomics', help='Upload a proteomics dataset'
+        "upload-proteomics", help="Upload a proteomics dataset"
         )
     proteomics_parser.add_argument(
-        '--protein-abundance-file', required=True, help='Path to the protein abundance file'
+        "--protein-abundance-file", required=True, help="Path to the protein abundance file"
         )
     proteomics_parser.add_argument(
-        '--experiment-annotation-file', help='Path to the experiment annotation file'
+        "--experiment-annotation-file", help="Path to the experiment annotation file"
         )
     proteomics_parser.add_argument(
-        '--annotation-job-id', help='ID of the annotation job to associate with this dataset]'
+        "--annotation-job-id", help="ID of the annotation job to associate with this dataset]"
         )
     proteomics_parser.add_argument(
-        '--proteomics-dataset-type', choices=[dt.value for dt in DatasetTypes], default='fragpipe_TMT', help='Type of proteomics dataset'
+        "--proteomics-dataset-type", choices=[dt.value for dt in DatasetTypes],
+        default="fragpipe_TMT", help="Type of proteomics dataset"
         )
     proteomics_parser.add_argument(
-        '--dir', default=DEFAULT_DIR, help='Directory where Bystro API login state is saved'
+        "--dir", default=DEFAULT_DIR, help="Directory where Bystro API login state is saved"
         )
     proteomics_parser.set_defaults(func=_handle_proteomics_upload)
 
