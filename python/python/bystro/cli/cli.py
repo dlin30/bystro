@@ -7,11 +7,10 @@ import requests
 import json
 
 from msgspec import Struct, json as mjson
-from bystro.api.auth import signup, login, authenticate
+from bystro.cli.auth import signup, login, authenticate
 from bystro.api.proteomics import upload_proteomics_dataset, DatasetTypes
 
 DEFAULT_DIR = os.path.expanduser("~/.bystro")
-STATE_FILE = "bystro_authentication_token.json"
 JOB_TYPE_ROUTE_MAP = {
     "all": "/list/all",
     "public": "/list/all/public",

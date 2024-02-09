@@ -5,7 +5,15 @@ import os
 from msgspec import json
 import pytest
 
-from bystro.api.auth import (
+from bystro.cli.cli import (
+    UserProfile,
+    JOB_TYPE_ROUTE_MAP,
+    get_jobs,
+    create_job,
+    get_user,
+)
+
+from bystro.cli.auth import (
     CachedAuth,
     SignupResponse,
     load_state,
@@ -13,14 +21,6 @@ from bystro.api.auth import (
     signup,
     login,
     _fq_host,
-)
-
-from bystro.cli.cli import (
-    UserProfile,
-    JOB_TYPE_ROUTE_MAP,
-    get_jobs,
-    create_job,
-    get_user,
 )
 
 EXAMPLE_DATE_STRING = "2023-09-06T05:45:01.446Z"
@@ -152,6 +152,50 @@ def test_login_failure(mocker, status_code, exception_message):
     with pytest.raises(RuntimeError, match=exception_message):
         login(args, print_result=False)
 
+def test_signup(mocker):
+    expected_response = EXAMPLE_SIGNUP_RESPONSE
+    mocker.patch(
+        "bystro.api.auth.save_state",
+        return_value=(EXAMPLE_CACHED_AUTH, {"Authorization": "Bearer TOKEN"}),
+    )
+    mocker.patch(
+        "requests.put",
+        return_value=mocker.Mock(
+            status_code=200, text=json.encode(expected_response).decode("utf-8")
+        ),
+    )
+    email = "test@example.com"
+    host = "http://localhost"
+    port = 8080
+    args = Namespace(
+        dir="./", email=email, password="password", name="test", host=host, port=port
+    )
+
+    response = signup(args, print_result=False)
+
+    url = _fq_host(Namespace(host=host, port=port))
+
+    expected_return = CachedAuth(
+        email=email, url=url, access_token=expected_response.access_token
+    )
+    assert response == expected_return
+
+
+def test_get_user(mocker):
+    mocker.patch(
+        "bystro.api.auth.authenticate",
+        return_value=(EXAMPLE_CACHED_AUTH, {"Authorization": "Bearer TOKEN"}),
+    )
+    mocker.patch(
+        "requests.get",
+        return_value=mocker.Mock(
+            status_code=200, text=json.encode(EXAMPLE_USER).decode("utf-8")
+        ),
+    )
+    args = Namespace(dir="./", email="test@example.com", password="password")
+    user = get_user(args, print_result=False)
+    assert user == EXAMPLE_USER
+
 
 def test_create_job(mocker):
     mocker.patch(
@@ -258,47 +302,3 @@ def test_get_job(mocker):
 
     assert response == parsed_job
 
-
-def test_signup(mocker):
-    expected_response = EXAMPLE_SIGNUP_RESPONSE
-    mocker.patch(
-        "bystro.api.auth.save_state",
-        return_value=(EXAMPLE_CACHED_AUTH, {"Authorization": "Bearer TOKEN"}),
-    )
-    mocker.patch(
-        "requests.put",
-        return_value=mocker.Mock(
-            status_code=200, text=json.encode(expected_response).decode("utf-8")
-        ),
-    )
-    email = "test@example.com"
-    host = "http://localhost"
-    port = 8080
-    args = Namespace(
-        dir="./", email=email, password="password", name="test", host=host, port=port
-    )
-
-    response = signup(args, print_result=False)
-
-    url = _fq_host(Namespace(host=host, port=port))
-
-    expected_return = CachedAuth(
-        email=email, url=url, access_token=expected_response.access_token
-    )
-    assert response == expected_return
-
-
-def test_get_user(mocker):
-    mocker.patch(
-        "bystro.api.auth.authenticate",
-        return_value=(EXAMPLE_CACHED_AUTH, {"Authorization": "Bearer TOKEN"}),
-    )
-    mocker.patch(
-        "requests.get",
-        return_value=mocker.Mock(
-            status_code=200, text=json.encode(EXAMPLE_USER).decode("utf-8")
-        ),
-    )
-    args = Namespace(dir="./", email="test@example.com", password="password")
-    user = get_user(args, print_result=False)
-    assert user == EXAMPLE_USER
