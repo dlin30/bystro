@@ -155,7 +155,7 @@ def test_login_failure(mocker, status_code, exception_message):
 
 def test_create_job(mocker):
     mocker.patch(
-        "bystro.api.cli.authenticate",
+        "bystro.api.auth.authenticate",
         return_value=(
             EXAMPLE_CACHED_AUTH,
             "localhost:8080",
@@ -177,7 +177,7 @@ def test_create_job(mocker):
 
 def test_get_job_fail_validation(mocker):
     mocker.patch(
-        "bystro.api.cli.authenticate",
+        "bystro.api.auth.authenticate",
         return_value=(EXAMPLE_CACHED_AUTH, {"Authorization": "Bearer TOKEN"}),
     )
 
@@ -203,7 +203,7 @@ def test_get_job_fail_validation(mocker):
 
 def test_get_job_list(mocker):
     mocker.patch(
-        "bystro.api.cli.authenticate",
+        "bystro.api.auth.authenticate",
         return_value=(EXAMPLE_CACHED_AUTH, {"Authorization": "Bearer TOKEN"}),
     )
     mocker.patch(
@@ -239,7 +239,7 @@ def test_get_job_list(mocker):
 
 def test_get_job(mocker):
     mocker.patch(
-        "bystro.api.cli.authenticate",
+        "bystro.api.auth.authenticate",
         return_value=(EXAMPLE_CACHED_AUTH, {"Authorization": "Bearer TOKEN"}),
     )
 
@@ -262,7 +262,7 @@ def test_get_job(mocker):
 def test_signup(mocker):
     expected_response = EXAMPLE_SIGNUP_RESPONSE
     mocker.patch(
-        "bystro.api.cli.save_state",
+        "bystro.api.auth.save_state",
         return_value=(EXAMPLE_CACHED_AUTH, {"Authorization": "Bearer TOKEN"}),
     )
     mocker.patch(
@@ -290,7 +290,7 @@ def test_signup(mocker):
 
 def test_get_user(mocker):
     mocker.patch(
-        "bystro.api.cli.authenticate",
+        "bystro.api.auth.authenticate",
         return_value=(EXAMPLE_CACHED_AUTH, {"Authorization": "Bearer TOKEN"}),
     )
     mocker.patch(
