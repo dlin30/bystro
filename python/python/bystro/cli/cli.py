@@ -340,7 +340,6 @@ def _handle_proteomics_upload(args):
         experiment_annotation_file=args.experiment_annotation_file,
         annotation_job_id=args.annotation_job_id,
         proteomics_dataset_type=proteomics_dataset_type,
-        url=state.url,
         auth_header=auth_header,
         print_result=True,
     )
