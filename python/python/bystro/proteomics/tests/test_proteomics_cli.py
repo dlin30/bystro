@@ -1,13 +1,14 @@
 from pathlib import Path
 
 from bystro.cli.tests.test_cli import EXAMPLE_CACHED_AUTH
-from bystro.api.proteomics import _configure_parser, upload_proteomics_dataset
+from bystro.api.proteomics import upload_proteomics_dataset
+from bystro.cli.cli import authenticate
 from msgspec import json as mjson
 
 
 def test_upload_proteomics_dataset(mocker):
     mocker.patch(
-        "bystro.api.proteomics_cli.authenticate",
+        "bystro.cli.cli.authenticate",
         return_value=(
             EXAMPLE_CACHED_AUTH,
             "localhost:8080",
@@ -32,11 +33,3 @@ def test_upload_proteomics_dataset(mocker):
     )
 
     assert response == {}
-
-
-def test__configure_parser():
-    parser = _configure_parser()
-    help_message = parser.format_help()
-    expected_commands = "{login,upload-proteomics-dataset}"
-
-    assert expected_commands in help_message
