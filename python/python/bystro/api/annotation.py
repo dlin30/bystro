@@ -121,12 +121,7 @@ def get_jobs(job_type=None, job_id=None, print_result=True
         print("\n")
 
     if job_id:
-        job = mjson.decode(response.text, type=dict)
-        # MongoDB doesn't support '.' in field names,
-        # so we neede to convert the config to string before saving
-        # so we decode the nested json here
-        job["config"] = mjson.decode(job["config"])
-        return job
+        return mjson.decode(response.text, type=dict)
 
     return mjson.decode(response.text, type=list[JobBasicResponse])
 
