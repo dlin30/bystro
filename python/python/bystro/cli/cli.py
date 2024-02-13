@@ -1,7 +1,7 @@
 import argparse
 
-from bystro.api.auth import signup, login, authenticate, get_user, UserProfile, CachedAuth
-from bystro.api.annotation import get_jobs, create_job, query, JobBasicResponse, JOB_TYPE_ROUTE_MAP
+from bystro.api.auth import signup, login, get_user, UserProfile, CachedAuth
+from bystro.api.annotation import get_jobs, create_jobs, query, JobBasicResponse, JOB_TYPE_ROUTE_MAP
 
 
 def signup_cli(args: argparse.Namespace, print_result=True) -> CachedAuth:
@@ -77,9 +77,9 @@ def get_jobs_cli(args: argparse.Namespace) -> list[JobBasicResponse] | dict:
     return get_jobs(job_type=args.type, job_id=args.id, print_result=True)
 
 
-def create_job_cli(args: argparse.Namespace) -> dict:
+def create_jobs_cli(args: argparse.Namespace) -> list[dict]:
     """
-    Creates a job for the given files.
+    Creates 1+ annotation jobs with the given files and assembly.
 
     Parameters
     ----------
@@ -90,11 +90,12 @@ def create_job_cli(args: argparse.Namespace) -> dict:
 
     Returns
     -------
-    dict
-        The newly created job.
+    list[dict]
+        The newly created annotation job submissions.
     """
-    return create_job(
+    return create_jobs(
         files=args.files,
+        names=args.names,
         assembly=args.assembly,
         index=args.create_index,
         print_result=True,
@@ -209,13 +210,23 @@ def main():
     user_parser.set_defaults(func=get_user_cli)
 
     # Adding the jobs sub-command
-    create_jobs_parser = subparsers.add_parser("create-job", help="Create a job")
+    create_jobs_parser = subparsers.add_parser("create-annotation", help="Create an annotation")
     create_jobs_parser.add_argument(
         "--files",
         nargs="+",
         required=True,
         type=str,
-        help="Paths to files: .vcf and .snp formats accepted.",
+        help="Paths to files: .vcf and .snp formats accepted. Each file is treated as a separate annotation",
+    )
+    create_jobs_parser.add_argument(
+        "--names",
+        nargs="+",
+        type=str,
+        help=(
+            "Names for each job, corresponding to the files provided. "
+            "Must be the same length as the files list. "
+            "Defaults to the basename of the files"
+        ),
     )
     create_jobs_parser.add_argument(
         "--assembly",
@@ -229,7 +240,7 @@ def main():
         default=True,
         help="Whether or not to create a natural language search index the annotation",
     )
-    create_jobs_parser.set_defaults(func=create_job_cli)
+    create_jobs_parser.set_defaults(func=create_jobs_cli)
 
     jobs_parser = subparsers.add_parser("get-jobs", help="Fetch one job or a list of jobs")
     jobs_parser.add_argument("--id", type=str, help="Get a specific job by ID")

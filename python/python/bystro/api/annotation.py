@@ -15,6 +15,7 @@ JOB_TYPE_ROUTE_MAP = {
     "failed": "/list/failed",
 }
 
+
 class JobBasicResponse(Struct, rename="camel"):
     """
     The basic job information, returned in job list commands
@@ -65,8 +66,7 @@ class UserProfile(Struct, rename="camel"):
     lastLogin: datetime.datetime
 
 
-def get_jobs(job_type=None, job_id=None, print_result=True
-) -> list[JobBasicResponse] | dict:
+def get_jobs(job_type=None, job_id=None, print_result=True) -> list[JobBasicResponse] | dict:
     """
     Fetches the jobs for the given job type, or a single job if a job id is specified.
 
@@ -126,10 +126,11 @@ def get_jobs(job_type=None, job_id=None, print_result=True
     return mjson.decode(response.text, type=list[JobBasicResponse])
 
 
-def create_job(files, assembly, index=True, print_result=True
-) -> dict:
+def create_jobs(
+    files, assembly: str, names: list[str] | None = None, index=True, print_result=True
+) -> list[dict]:
     """
-    Creates a job for the given files.
+    Creates 1+ annotation jobs
 
     Parameters
     ----------
@@ -137,6 +138,8 @@ def create_job(files, assembly, index=True, print_result=True
         List of file paths for job creation.
     assembly : str
         Genome assembly (e.g., hg19, hg38).
+    names : list[str], optional
+        List of names for the annotation jobs, one per file. If not provided, the file name will be used.
     index : bool, optional
         Whether to create a search index for the annotation, by default True.
     print_result : bool, optional
@@ -144,53 +147,50 @@ def create_job(files, assembly, index=True, print_result=True
 
     Returns
     -------
-    dict
-        The newly created job.
+    list[dict]
+        The annotation submissions
     """
+    if names is not None:
+        if len(names) != len(files):
+            raise ValueError("The number of names must match the number of files")
+
     state, auth_header = authenticate()
     url = state.url + "/api/jobs/upload/"
 
-    payload = {
-        "job": mjson.encode(
-            {
-                "assembly": assembly,
-                "options": {"index": index},
-            }
-        )
-    }
+    jobs_created = []
+    for i, file in enumerate(files):
+        name = names[i] if names is not None else os.path.basename(file)
+        payload = {
+            "job": mjson.encode({"assembly": assembly, "options": {"index": index}, "name": name})
+        }
 
-    files = []
-    for file in files:
-        files.append(
+        file_request = [
             (
                 "file",
                 (
                     os.path.basename(file),
-                    open(file, "rb"),  # noqa: SIM115
+                    open(file, "rb"),
                     "application/octet-stream",
                 ),
             )
-        )
+        ]
 
-    if print_result:
-        print(f"\nCreating jobs for files: {','.join(map(lambda x: x[1][0], files))}\n")
+        response = requests.post(url, headers=auth_header, data=payload, files=file_request, timeout=30)
 
-    response = requests.post(
-        url, headers=auth_header, data=payload, files=files, timeout=30
-    )
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"Job creation failed with response status: {response.status_code}.\
+                    Error: \n{response.text}\n"
+            )
 
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Job creation failed with response status: {response.status_code}.\
-                Error: \n{response.text}\n"
-        )
+        if print_result:
+            print("\nJob creation successful:\n")
+            print(mjson.format(response.text, indent=4))
+            print("\n")
 
-    if print_result:
-        print("\nJob creation successful:\n")
-        print(mjson.format(response.text, indent=4))
-        print("\n")
+        jobs_created.append(response.json())
 
-    return response.json()
+    return jobs_created
 
 
 def query(job_id, query, size=10, from_=0):
@@ -244,14 +244,13 @@ def query(job_id, query, size=10, from_=0):
 
         if response.status_code != 200:
             raise RuntimeError(
-                (f"Query failed with status: {response.status_code}. "
-                f"Error: \n{response.text}\n")
+                (f"Query failed with status: {response.status_code}. " f"Error: \n{response.text}\n")
             )
 
         query_results = response.json()
 
         print("\nQuery Results:")
-        print(mjson.format(mjson.encode(query_results), indent = 4))
+        print(mjson.format(mjson.encode(query_results), indent=4))
 
     except Exception as e:
         sys.stderr.write(f"Query failed: {e}\n")
