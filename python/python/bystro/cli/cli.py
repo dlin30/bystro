@@ -352,7 +352,7 @@ def _handle_proteomics_upload(
         experiment_annotation_file,
         annotation_job_id,
         proteomics_dataset_type,
-        bystro_credentials_dir=DEFAULT_DIR,
+        user_dir=bystro_credentials_dir,
         print_result=True,
     )
 

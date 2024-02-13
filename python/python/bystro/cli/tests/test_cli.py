@@ -167,7 +167,7 @@ def test_signup(mocker):
     email = "test@example.com"
     host = "http://localhost"
     port = 8080
-    password = "password",
+    password = "password"
     name = "test"
 
     response = signup(email, password, name, host, port, print_result=False)
