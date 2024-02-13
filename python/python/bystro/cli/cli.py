@@ -7,7 +7,7 @@ import requests
 import json
 
 from msgspec import Struct, json as mjson
-from bystro.cli.auth import signup, login, authenticate
+from bystro.api.auth import signup, login, authenticate
 from bystro.api.proteomics import upload_proteomics_dataset, DatasetTypes
 
 DEFAULT_DIR = os.path.expanduser("~/.bystro")
@@ -72,28 +72,29 @@ class UserProfile(Struct, rename="camel"):
 
 
 def get_jobs(
-    args: argparse.Namespace, print_result=True
+    bystro_credentials_dir, job_type=None, job_id=None, print_result=True
 ) -> list[JobBasicResponse] | dict:
     """
     Fetches the jobs for the given job type, or a single job if a job id is specified.
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The arguments passed to the command.
+    bystro_credentials_dir : str
+        The directory where the Bystro API login state is saved.
+    job_type : str, optional
+        The type of jobs to fetch.
+    job_id : str, optional
+        The ID of a specific job to fetch.
     print_result : bool, optional
         Whether to print the result of the job fetch operation, by default True.
 
     Returns
     -------
-    dict
+    dict or list[JobBasicResponse]
         The response from the server.
-
     """
-    state, auth_header = authenticate(args.dir)
+    state, auth_header = authenticate(bystro_credentials_dir)
     url = state.url + "/api/jobs"
-    job_type = args.type
-    job_id = args.id
 
     if not (job_id or job_type):
         raise ValueError("Please specify either a job id or a job type")
@@ -137,14 +138,22 @@ def get_jobs(
     return mjson.decode(response.text, type=list[JobBasicResponse])
 
 
-def create_job(args: argparse.Namespace, print_result=True) -> dict:
+def create_job(
+    bystro_credentials_dir, files, assembly, index=True, print_result=True
+) -> dict:
     """
     Creates a job for the given files.
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The arguments passed to the command.
+    bystro_credentials_dir : str
+        The directory where the Bystro API login state is saved.
+    files : list[str]
+        List of file paths for job creation.
+    assembly : str
+        Genome assembly (e.g., hg19, hg38).
+    index : bool, optional
+        Whether to create a search index for the annotation, by default True.
     print_result : bool, optional
         Whether to print the result of the job creation operation, by default True.
 
@@ -153,20 +162,20 @@ def create_job(args: argparse.Namespace, print_result=True) -> dict:
     dict
         The newly created job.
     """
-    state, auth_header = authenticate(args.dir)
+    state, auth_header = authenticate(bystro_credentials_dir)
     url = state.url + "/api/jobs/upload/"
 
     payload = {
         "job": mjson.encode(
             {
-                "assembly": args.assembly,
-                "options": {"index": args.index},
+                "assembly": assembly,
+                "options": {"index": index},
             }
         )
     }
 
     files = []
-    for file in args.files:
+    for file in files:
         files.append(
             (
                 "file",
@@ -199,14 +208,14 @@ def create_job(args: argparse.Namespace, print_result=True) -> dict:
     return response.json()
 
 
-def get_user(args: argparse.Namespace, print_result=True) -> UserProfile:
+def get_user(bystro_credentials_dir, print_result=True) -> UserProfile:
     """
     Fetches the user profile.
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The arguments passed to the command.
+    bystro_credentials_dir : str
+        The directory where the Bystro API login state is saved.
     print_result : bool, optional
         Whether to print the result of the user profile fetch operation, by default True.
 
@@ -218,7 +227,7 @@ def get_user(args: argparse.Namespace, print_result=True) -> UserProfile:
     if print_result:
         print("\n\nFetching user profile\n")
 
-    state, auth_header = authenticate(args.dir)
+    state, auth_header = authenticate(bystro_credentials_dir)
 
     response = requests.get(state.url + "/api/user/me", headers=auth_header, timeout=30)
 
@@ -238,15 +247,13 @@ def get_user(args: argparse.Namespace, print_result=True) -> UserProfile:
     return user_profile
 
 
-def query(args: argparse.Namespace) -> None:
+def query(bystro_credentials_dir, job_id, query, size=10, from_=0):
     """
     Performs a query search within the specified job with the given arguments.
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The arguments passed to the command.
-    dir : str, optional
+    bystro_credentials_dir : str, optional
         The directory where the Bystro API login state is saved.
     query : str, required
         The search query string to be used for fetching data.
@@ -263,17 +270,17 @@ def query(args: argparse.Namespace) -> None:
         The queried results
     """
 
-    state, auth_header = authenticate(args.dir)
+    state, auth_header = authenticate(bystro_credentials_dir)
 
     try:
         query_payload = {
-            "from": args.from_,
+            "from": from_,
             "query": {
                 "bool": {
                     "must": {
                         "query_string": {
                             "default_operator": "AND",
-                            "query": args.query,
+                            "query": query,
                             "lenient": True,
                             "phrase_slop": 5,
                             "tie_breaker": 0.3,
@@ -281,13 +288,13 @@ def query(args: argparse.Namespace) -> None:
                     }
                 }
             },
-            "size": args.size,
+            "size": size,
         }
 
         response = requests.post(
-            state.url + f"/api/jobs/{args.job_id}/search",
+            state.url + f"/api/jobs/{job_id}/search",
             headers=auth_header,
-            json={"id": args.job_id, "searchBody": query_payload},
+            json={"id": job_id, "searchBody": query_payload},
             timeout=30,
         )
 
@@ -306,7 +313,13 @@ def query(args: argparse.Namespace) -> None:
         sys.stderr.write(f"Query failed: {e}\n")
 
 
-def _handle_proteomics_upload(args):
+def _handle_proteomics_upload(
+        bystro_credentials_dir,
+        protein_abundance_file,
+        experiment_annotation_file,
+        annotation_job_id,
+        proteomics_dataset_type,
+    ):
     """
     Upload a fragpipe-TMT dataset through the /api/jobs/proteomics/ endpoint and 
     update the annotation job.
@@ -321,7 +334,7 @@ def _handle_proteomics_upload(args):
         ID of the job associated with the annotation dataset.
     proteomics_dataset_type : DatasetTypes
         Type of the proteomics dataset (we only support fragpipe-TMT currently).
-    user_dir : str
+    bystro_credentials_dir : str
         User directory for authentication state.
     print_result : bool, optional
         Whether to print the result of the upload operation, by default True.
@@ -332,14 +345,14 @@ def _handle_proteomics_upload(args):
         A json response with annotationID and proteomicsID.
     """
 
-    state, auth_header = authenticate(args.dir)
-    proteomics_dataset_type = DatasetTypes[args.proteomics_dataset_type]
+    state, auth_header = authenticate(bystro_credentials_dir)
+    proteomics_dataset_type = DatasetTypes[proteomics_dataset_type]
     upload_proteomics_dataset(
-        protein_abundance_file=args.protein_abundance_file,
-        experiment_annotation_file=args.experiment_annotation_file,
-        annotation_job_id=args.annotation_job_id,
-        proteomics_dataset_type=proteomics_dataset_type,
-        user_dir=DEFAULT_DIR,
+        protein_abundance_file,
+        experiment_annotation_file,
+        annotation_job_id,
+        proteomics_dataset_type,
+        bystro_credentials_dir=DEFAULT_DIR,
         print_result=True,
     )
 

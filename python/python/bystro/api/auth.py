@@ -1,4 +1,3 @@
-import argparse
 import os
 
 import requests
@@ -54,21 +53,23 @@ class CachedAuth(Struct, rename="camel"):
     url: str
 
 
-def _fq_host(args: argparse.Namespace) -> str:
+def _fq_host(host: str, port: int) -> str:
     """
     Returns the fully qualified host, e.g. https://bystro-dev.emory.edu:443
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The arguments passed to the command.
+    host : str
+        The hostname or IP address of the server.
+    port : int
+        The port number on which the server is listening.
 
     Returns
     -------
     str
         The fully qualified host.
     """
-    return f"{args.host}:{args.port}"
+    return f"{host}:{port}"
 
 
 def load_state(bystro_credentials_dir: str = DEFAULT_DIR) -> CachedAuth | None:
@@ -126,15 +127,33 @@ def save_state(data: CachedAuth, bystro_credentials_dir: str = DEFAULT_DIR, prin
         )
 
 
-def signup(args: argparse.Namespace, print_result=True) -> CachedAuth:
+def signup(
+        email: str,
+        password: str,
+        name: str,
+        host: str,
+        port: int,
+        bystro_credentials_dir: str = DEFAULT_DIR,
+        print_result=True
+    ) -> CachedAuth:
     """
     Signs up for Bystro with the given email, name, and password. Additionally, logs in and
     saves the credentials, to enable API calls without re-authenticating.
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The arguments passed to the command.
+    email : str
+        The email address for the account.
+    name : str
+        The name of the user.
+    password : str
+        The password for the account.
+    host : str
+        The hostname or IP address of the Bystro server.
+    port : int
+        The port number on which the Bystro server is listening.
+    bystro_credentials_dir : str, optional
+        The directory where the authentication state will be saved, by default DEFAULT_DIR.
     print_result : bool, optional
         Whether to print the result of the signup operation, by default True.
 
@@ -144,12 +163,12 @@ def signup(args: argparse.Namespace, print_result=True) -> CachedAuth:
         The cached authentication state.
     """
     if print_result:
-        print(f"\nSigning up for Bystro with email: {args.email}, name: {args.name}")
+        print(f"\nSigning up for Bystro with email: {email}, name: {name}")
 
-    fq_host = _fq_host(args)
+    fq_host = _fq_host(host, port)
     url = f"{fq_host}/api/user"
 
-    data = {"email": args.email, "name": args.name, "password": args.password}
+    data = {"email": email, "name": name, "password": password}
 
     response = requests.put(url, data=data, timeout=30)
 
@@ -162,12 +181,12 @@ def signup(args: argparse.Namespace, print_result=True) -> CachedAuth:
     state = CachedAuth(
         access_token=res.access_token,
         url=fq_host,
-        email=args.email,
+        email=email,
     )
 
     save_state(
         state,
-        args.dir,
+        bystro_credentials_dir,
         print_result,
     )
 
@@ -177,14 +196,29 @@ def signup(args: argparse.Namespace, print_result=True) -> CachedAuth:
     return state
 
 
-def login(args: argparse.Namespace, print_result=True) -> CachedAuth:
+def login(
+        email: str,
+        password: str,
+        host: str,
+        port: int,
+        bystro_credentials_dir: str = DEFAULT_DIR,
+        print_result=True,
+    ) -> CachedAuth:
     """
-    Logs in to the server and saves the authentication state to a file.
+    Logs in to the server with the provided credentials and saves the authentication state to a file.
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The arguments passed to the command.
+    email : str
+        The email address used for login.
+    password : str
+        The password for the account.
+    host : str
+        The hostname or IP address of the Bystro server.
+    port : int
+        The port number on which the Bystro server is listening.
+    bystro_credentials_dir : str, optional
+        The directory where the authentication state will be saved, by default DEFAULT_DIR.
     print_result : bool, optional
         Whether to print the result of the login operation, by default True.
 
@@ -193,14 +227,14 @@ def login(args: argparse.Namespace, print_result=True) -> CachedAuth:
     CachedAuth
         The cached authentication state.
     """
-    fq_host = _fq_host(args)
+    fq_host = _fq_host(host, port)
 
     if print_result:
-        print(f"\nLogging into {fq_host} with email: {args.email}.")
+        print(f"\nLogging into {fq_host} with email: {email}.")
 
     url = f"{fq_host}/api/user/auth/local"
 
-    body = {"email": args.email, "password": args.password}
+    body = {"email": email, "password": password}
 
     response = requests.post(url, data=body, timeout=30)
 
@@ -210,8 +244,8 @@ def login(args: argparse.Namespace, print_result=True) -> CachedAuth:
         )
 
     res = mjson.decode(response.text, type=LoginResponse)
-    state = CachedAuth(access_token=res.access_token, url=fq_host, email=args.email)
-    save_state(state, args.dir, print_result)
+    state = CachedAuth(access_token=res.access_token, url=fq_host, email=email)
+    save_state(state, bystro_credentials_dir, print_result)
 
     if print_result:
         print("\nLogin successful. You may now use the Bystro API!\n")
@@ -219,21 +253,21 @@ def login(args: argparse.Namespace, print_result=True) -> CachedAuth:
     return state
 
 
-def authenticate(dir_path: str) -> tuple[CachedAuth, dict]:
+def authenticate(bystro_credentials_dir: str) -> tuple[CachedAuth, dict]:
     """
     Authenticates the user and returns the url, auth header, and email.
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The arguments passed to the command.
+    dir : str
+        The directory path where the authentication state file is located.
 
     Returns
     -------
     tuple[CachedAuth, dict]
         The cached auth credentials and auth header
     """
-    state = load_state(dir_path)
+    state = load_state(bystro_credentials_dir)
 
     if not state:
         raise ValueError("\n\nYou are not logged in. Please login first.\n")

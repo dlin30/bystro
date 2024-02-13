@@ -1,4 +1,3 @@
-from argparse import Namespace
 from datetime import datetime, timezone
 import os
 
@@ -13,7 +12,7 @@ from bystro.cli.cli import (
     get_user,
 )
 
-from bystro.cli.auth import (
+from bystro.api.auth import (
     CachedAuth,
     SignupResponse,
     load_state,
@@ -22,6 +21,8 @@ from bystro.cli.auth import (
     login,
     _fq_host,
 )
+
+DEFAULT_DIR = os.path.expanduser("~/.bystro")
 
 EXAMPLE_DATE_STRING = "2023-09-06T05:45:01.446Z"
 
@@ -107,23 +108,24 @@ def test_load_state_existing_file(mocker):
             read_data=json.encode(EXAMPLE_CACHED_AUTH).decode("utf-8")
         ),
     )
-    result = load_state("./")
+    result = load_state(DEFAULT_DIR)
 
     assert result == EXAMPLE_CACHED_AUTH
 
 
 def test_load_state_no_file(mocker):
     mocker.patch("os.path.exists", return_value=False)
-    result = load_state("./")
+    result = load_state(DEFAULT_DIR)
     assert result is None
 
 
 def test_save_state(mocker):
     mock_open = mocker.patch("builtins.open", mocker.mock_open())
 
-    save_state(EXAMPLE_CACHED_AUTH, "./", print_result=False)
+    save_state(EXAMPLE_CACHED_AUTH, DEFAULT_DIR, print_result=False)
+    expected_file_path = os.path.join(DEFAULT_DIR, "bystro_authentication_token.json")
     mock_open.assert_called_once_with(
-        "./bystro_authentication_token.json", "w", encoding="utf-8"
+        expected_file_path, "w", encoding="utf-8"
     )
 
 
@@ -142,15 +144,13 @@ def test_login_failure(mocker, status_code, exception_message):
             text="error" if status_code == 404 else "server error",
         ),
     )
-    args = Namespace(
-        host="localhost",
-        port=8080,
-        email="test@example.com",
-        password="password",
-        dir="./",
-    )
+    host = "localhost"
+    port = 8080
+    email = "test@example.com"
+    password = "password"
+    bystro_credentials_dir = DEFAULT_DIR
     with pytest.raises(RuntimeError, match=exception_message):
-        login(args, print_result=False)
+        login(email, password, host, port, bystro_credentials_dir, print_result=False)
 
 def test_signup(mocker):
     expected_response = EXAMPLE_SIGNUP_RESPONSE
@@ -167,13 +167,12 @@ def test_signup(mocker):
     email = "test@example.com"
     host = "http://localhost"
     port = 8080
-    args = Namespace(
-        dir="./", email=email, password="password", name="test", host=host, port=port
-    )
+    password = "password",
+    name = "test"
 
-    response = signup(args, print_result=False)
+    response = signup(email, password, name, host, port, print_result=False)
 
-    url = _fq_host(Namespace(host=host, port=port))
+    url = _fq_host(host=host, port=port)
 
     expected_return = CachedAuth(
         email=email, url=url, access_token=expected_response.access_token
@@ -192,8 +191,9 @@ def test_get_user(mocker):
             status_code=200, text=json.encode(EXAMPLE_USER).decode("utf-8")
         ),
     )
-    args = Namespace(dir="./", email="test@example.com", password="password")
-    user = get_user(args, print_result=False)
+    bystro_credentials_dir = DEFAULT_DIR
+
+    user = get_user(bystro_credentials_dir, print_result=False)
     assert user == EXAMPLE_USER
 
 
@@ -209,13 +209,13 @@ def test_create_job(mocker):
         "requests.post",
         return_value=mocker.Mock(status_code=200, json=lambda: {"success": True}),
     )
-    args = Namespace(
-        files=[os.path.join(os.path.dirname(__file__), "trio.trim.vep.short.vcf.gz")],
-        assembly="hg38",
-        index=True,
-        dir="./",
-    )
-    response = create_job(args, print_result=False)
+
+    files = [os.path.join(os.path.dirname(__file__), "trio.trim.vep.short.vcf.gz")]
+    assembly = "hg38"
+    index = True
+    bystro_credentials_dir = DEFAULT_DIR
+
+    response = create_job(bystro_credentials_dir, files, assembly, index, print_result=False)
     assert response == {"success": True}
 
 
@@ -228,21 +228,29 @@ def test_get_job_fail_validation(mocker):
     with pytest.raises(
         ValueError, match="Please specify either a job id or a job type"
     ):
-        args = Namespace(dir="./", type=None, id=None)
-        get_jobs(args, print_result=False)
+        bystro_credentials_dir = DEFAULT_DIR
+        job_type = None
+        job_id = None
+
+        get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
 
     with pytest.raises(
         ValueError, match="Please specify either a job id or a job type, not both"
     ):
-        args = Namespace(dir="./", type="completed", id="1234")
-        get_jobs(args, print_result=False)
+        bystro_credentials_dir = DEFAULT_DIR
+        job_type = "completed"
+        job_id = "1234"
+
+        get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
 
     with pytest.raises(
         ValueError,
         match=f"Invalid job type: dasfa. Valid types are: {', '.join(JOB_TYPE_ROUTE_MAP.keys())}",
     ):
-        args = Namespace(dir="./", type="dasfa", id=None)
-        get_jobs(args, print_result=False)
+        bystro_credentials_dir = DEFAULT_DIR
+        job_type = "dasfa"
+        job_id = None
+        get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
 
 
 def test_get_job_list(mocker):
@@ -255,29 +263,41 @@ def test_get_job_list(mocker):
         return_value=mocker.Mock(status_code=200, text="[]"),  # noqa: PIE807
     )
 
-    args = Namespace(dir="./", type="completed", id=None)
+    bystro_credentials_dir = DEFAULT_DIR
+    job_type = "completed"
+    job_id = None
 
-    response = get_jobs(args, print_result=False)
+    response = get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
     assert response == []
 
-    args = Namespace(dir="./", type="failed", id=None)
-    response = get_jobs(args, print_result=False)
+    bystro_credentials_dir = DEFAULT_DIR
+    job_type = "failed"
+    job_id = None
+    response = get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
     assert response == []
 
-    args = Namespace(dir="./", type="public", id=None)
-    response = get_jobs(args, print_result=False)
+    bystro_credentials_dir = DEFAULT_DIR
+    job_type = "public"
+    job_id = None
+    response = get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
     assert response == []
 
-    args = Namespace(dir="./", type="shared", id=None)
-    response = get_jobs(args, print_result=False)
+    bystro_credentials_dir = DEFAULT_DIR
+    job_type = "shared"
+    job_id = None
+    response = get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
     assert response == []
 
-    args = Namespace(dir="./", type="all", id=None)
-    response = get_jobs(args, print_result=False)
+    bystro_credentials_dir = DEFAULT_DIR
+    job_type = "all"
+    job_id = None
+    response = get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
     assert response == []
 
-    args = Namespace(dir="./", type="incomplete", id=None)
-    response = get_jobs(args, print_result=False)
+    bystro_credentials_dir = DEFAULT_DIR
+    job_type = "incomplete"
+    job_id = None
+    response = get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
     assert response == []
 
 
@@ -294,8 +314,10 @@ def test_get_job(mocker):
         ),
     )
 
-    args = Namespace(dir="./", id="12341", type=None)
-    response = get_jobs(args, print_result=False)
+    bystro_credentials_dir = DEFAULT_DIR
+    job_id = "12341"
+    job_type = None
+    response = get_jobs(bystro_credentials_dir, job_type, job_id, print_result=False)
 
     parsed_job = EXAMPLE_JOB.copy()
     parsed_job["config"] = json.decode(parsed_job["config"]) # type: ignore
