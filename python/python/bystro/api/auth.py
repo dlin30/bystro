@@ -79,7 +79,7 @@ class UserProfile(Struct, rename="camel"):
         The accounts of the user.
     role : str
         The role of the user.
-    lastLogin : str
+    last_login : datetime.datetime
         The date the user last logged in.
     """
 
@@ -89,7 +89,7 @@ class UserProfile(Struct, rename="camel"):
     email: str
     accounts: list[str]
     role: str
-    lastLogin: datetime.datetime
+    last_login: datetime.datetime
 
 
 def _fq_host(host: str, port: int | None = None) -> str:
