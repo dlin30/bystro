@@ -1,14 +1,23 @@
 import os
 
 import requests
+import datetime
 
 from msgspec import Struct, json as mjson
 
 DEFAULT_DIR = os.path.expanduser("~/.bystro")
 STATE_FILE = "bystro_authentication_token.json"
 
+CREDENTIALS_PATH = os.path.join(DEFAULT_DIR, STATE_FILE)
 
-class SignupResponse(Struct, rename="camel"):
+if not os.path.exists(DEFAULT_DIR):
+    os.makedirs(DEFAULT_DIR, exist_ok=True)
+    print(f"Created default credentials path: {CREDENTIALS_PATH}")
+
+print(f"Using default credentials path: {CREDENTIALS_PATH}")
+
+
+class SignupResponse(Struct):
     """
     The response body for signing up for Bystro.
 
@@ -21,7 +30,7 @@ class SignupResponse(Struct, rename="camel"):
     access_token: str
 
 
-class LoginResponse(Struct, rename="camel"):
+class LoginResponse(Struct):
     """
     The response body for logging in to Bystro.
 
@@ -34,7 +43,7 @@ class LoginResponse(Struct, rename="camel"):
     access_token: str
 
 
-class CachedAuth(Struct, rename="camel"):
+class CachedAuth(Struct):
     """
     The authentication state.
 
@@ -52,8 +61,38 @@ class CachedAuth(Struct, rename="camel"):
     access_token: str
     url: str
 
+class UserProfile(Struct, rename="camel"):
+    """
+    The response body for fetching the user profile.
 
-def _fq_host(host: str, port: int) -> str:
+    Attributes
+    ----------
+    options : dict
+        The user options.
+    _id : str
+        The id of the user.
+    name : str
+        The name of the user.
+    email : str
+        The email of the user.
+    accounts : list[str]
+        The accounts of the user.
+    role : str
+        The role of the user.
+    lastLogin : str
+        The date the user last logged in.
+    """
+
+    _id: str
+    options: dict
+    name: str
+    email: str
+    accounts: list[str]
+    role: str
+    lastLogin: datetime.datetime
+
+
+def _fq_host(host: str, port: int | None = None) -> str:
     """
     Returns the fully qualified host, e.g. https://bystro-dev.emory.edu:443
 
@@ -61,41 +100,48 @@ def _fq_host(host: str, port: int) -> str:
     ----------
     host : str
         The hostname or IP address of the server.
-    port : int
-        The port number on which the server is listening.
+    port : int | None
+        (Optional) The port number on which the server is listening.
 
     Returns
     -------
     str
         The fully qualified host.
     """
+    if port is None:
+        # parse the port from the host protocol
+        if host.startswith("https"):
+            port = 443
+        elif host.startswith("http"):
+            port = 80
+        else:
+            raise ValueError(f"Invalid host protocol: {host}")
+
     return f"{host}:{port}"
 
 
-def load_state(bystro_credentials_dir: str = DEFAULT_DIR) -> CachedAuth | None:
+def load_state() -> CachedAuth | None:
     """
     Loads the authentication state from the state directory.
-
-    Parameters
-    ----------
-    bystro_credentials_dir : str
-        The directory where the authentication state is saved.
 
     Returns
     -------
     CachedAuth | None
         The authentication state, or None if the state file doesn't exist.
     """
-    path = os.path.join(bystro_credentials_dir, STATE_FILE)
+    if os.path.exists(CREDENTIALS_PATH):
+        with open(CREDENTIALS_PATH, "r", encoding="utf-8") as f:
+            data = f.read()
 
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return mjson.decode(f.read(), type=CachedAuth)
+            if not data:
+                return None
+
+            return mjson.decode(data, type=CachedAuth)
 
     return None
 
 
-def save_state(data: CachedAuth, bystro_credentials_dir: str = DEFAULT_DIR, print_result=True) -> None:
+def save_state(data: CachedAuth, print_result=True) -> None:
     """
     Saves the authentication state to a file.
 
@@ -103,8 +149,6 @@ def save_state(data: CachedAuth, bystro_credentials_dir: str = DEFAULT_DIR, prin
     ----------
     data : CachedAuth
         The data to save.
-    bystro_credentials_dir : str
-        The directory where the authentication state will be saved.
     print_result : bool, optional
         Whether to print the result of the save operation, by default True.
 
@@ -112,18 +156,14 @@ def save_state(data: CachedAuth, bystro_credentials_dir: str = DEFAULT_DIR, prin
     --------
     None
     """
-    if not os.path.exists(bystro_credentials_dir):
-        os.makedirs(bystro_credentials_dir, exist_ok=True)
-
-    save_path = os.path.join(bystro_credentials_dir, STATE_FILE)
     encoded_data = mjson.encode(data).decode("utf-8")
 
-    with open(save_path, "w", encoding="utf-8") as f:
+    with open(CREDENTIALS_PATH, "w", encoding="utf-8") as f:
         f.write(encoded_data)
 
     if print_result:
         print(
-            f"\nSaved auth credentials to {save_path}:\n{mjson.format(encoded_data, indent=4)}"
+            f"\nSaved auth credentials to {CREDENTIALS_PATH}:\n{mjson.format(encoded_data, indent=4)}"
         )
 
 
@@ -132,8 +172,7 @@ def signup(
         password: str,
         name: str,
         host: str,
-        port: int,
-        bystro_credentials_dir: str = DEFAULT_DIR,
+        port: int | None = None,
         print_result=True
     ) -> CachedAuth:
     """
@@ -150,10 +189,8 @@ def signup(
         The password for the account.
     host : str
         The hostname or IP address of the Bystro server.
-    port : int
-        The port number on which the Bystro server is listening.
-    bystro_credentials_dir : str, optional
-        The directory where the authentication state will be saved, by default DEFAULT_DIR.
+    port : int | None
+        (Optional) The port number on which the Bystro server is listening.
     print_result : bool, optional
         Whether to print the result of the signup operation, by default True.
 
@@ -162,6 +199,10 @@ def signup(
     CachedAuth
         The cached authentication state.
     """
+    if os.path.exists(CREDENTIALS_PATH):
+        print("Existing session found, logging out")
+        logout()
+
     if print_result:
         print(f"\nSigning up for Bystro with email: {email}, name: {name}")
 
@@ -186,7 +227,6 @@ def signup(
 
     save_state(
         state,
-        bystro_credentials_dir,
         print_result,
     )
 
@@ -200,8 +240,7 @@ def login(
         email: str,
         password: str,
         host: str,
-        port: int,
-        bystro_credentials_dir: str = DEFAULT_DIR,
+        port: int | None = None,
         print_result=True,
     ) -> CachedAuth:
     """
@@ -215,10 +254,8 @@ def login(
         The password for the account.
     host : str
         The hostname or IP address of the Bystro server.
-    port : int
-        The port number on which the Bystro server is listening.
-    bystro_credentials_dir : str, optional
-        The directory where the authentication state will be saved, by default DEFAULT_DIR.
+    port : int | None
+        (Optional) The port number on which the Bystro server is listening.
     print_result : bool, optional
         Whether to print the result of the login operation, by default True.
 
@@ -227,6 +264,10 @@ def login(
     CachedAuth
         The cached authentication state.
     """
+    if os.path.exists(CREDENTIALS_PATH):
+        print("Existing session found, logging out")
+        logout()
+
     fq_host = _fq_host(host, port)
 
     if print_result:
@@ -243,9 +284,10 @@ def login(
             f"Login failed with response status: {response.status_code}. Error: \n{response.text}\n"
         )
 
+    print("response.text", response.text)
     res = mjson.decode(response.text, type=LoginResponse)
     state = CachedAuth(access_token=res.access_token, url=fq_host, email=email)
-    save_state(state, bystro_credentials_dir, print_result)
+    save_state(state, print_result)
 
     if print_result:
         print("\nLogin successful. You may now use the Bystro API!\n")
@@ -253,24 +295,76 @@ def login(
     return state
 
 
-def authenticate(bystro_credentials_dir: str) -> tuple[CachedAuth, dict]:
+def authenticate() -> tuple[CachedAuth, dict]:
     """
     Authenticates the user and returns the url, auth header, and email.
 
-    Parameters
-    ----------
-    dir : str
-        The directory path where the authentication state file is located.
 
     Returns
     -------
     tuple[CachedAuth, dict]
         The cached auth credentials and auth header
     """
-    state = load_state(bystro_credentials_dir)
+    state = load_state()
 
     if not state:
         raise ValueError("\n\nYou are not logged in. Please login first.\n")
 
     header = {"Authorization": f"Bearer {state.access_token}"}
     return state, header
+
+
+def get_user(print_result=True) -> UserProfile:
+    """
+    Fetches the user profile.
+
+    Parameters
+    ----------
+    print_result : bool, optional
+        Whether to print the result of the user profile fetch operation, by default True.
+
+    Returns
+    -------
+    UserProfile
+        The user profile
+    """
+    if print_result:
+        print("\n\nFetching user profile\n")
+
+    state, auth_header = authenticate()
+
+    response = requests.get(state.url + "/api/user/me", headers=auth_header, timeout=30)
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Fetching profile failed with response status: {response.status_code}.\
+                Error: \n{response.text}\n"
+        )
+
+    user_profile = mjson.decode(response.text, type=UserProfile)
+
+    if print_result:
+        print(f"\nFetched Profile for email {state.email}\n")
+        print(mjson.format(response.text, indent=4))
+        print("\n")
+
+    return user_profile
+
+def logout(print_result=True) -> None:
+    """
+    Logs out of the Bystro server by deleting the authentication state file.
+
+    Parameters
+    ----------
+    print_result : bool, optional
+        Whether to print the result of the logout operation, by default True.
+
+    Returns
+    -------
+    None
+    """
+    if os.path.exists(CREDENTIALS_PATH):
+        os.remove(CREDENTIALS_PATH)
+
+    if print_result:
+        print(f"\nLogged out. Removed auth credentials from {CREDENTIALS_PATH}\n")

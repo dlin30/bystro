@@ -117,3 +117,47 @@ def upload_proteomics_dataset(
         return final_response
 
     raise Exception(f"Upload failed with status code {response.status_code}: {response.text}")
+
+
+def _handle_proteomics_upload(
+        bystro_credentials_dir,
+        protein_abundance_file,
+        experiment_annotation_file,
+        annotation_job_id,
+        proteomics_dataset_type,
+    ):
+    """
+    Upload a fragpipe-TMT dataset through the /api/jobs/proteomics/ endpoint and 
+    update the annotation job.
+
+    Parameters
+    ----------
+    protein_abundance_file : str
+        Path to the protein abundance file.
+    experiment_annotation_file : str | None
+        Path to the experiment annotation file.
+    experiment_annotation_file : str | None
+        ID of the job associated with the annotation dataset.
+    proteomics_dataset_type : DatasetTypes
+        Type of the proteomics dataset (we only support fragpipe-TMT currently).
+    bystro_credentials_dir : str
+        User directory for authentication state.
+    print_result : bool, optional
+        Whether to print the result of the upload operation, by default True.
+
+    Returns
+    -------
+    dict
+        A json response with annotationID and proteomicsID.
+    """
+
+    state, auth_header = authenticate(bystro_credentials_dir)
+    proteomics_dataset_type = DatasetTypes[proteomics_dataset_type]
+    upload_proteomics_dataset(
+        protein_abundance_file,
+        experiment_annotation_file,
+        annotation_job_id,
+        proteomics_dataset_type,
+        user_dir=bystro_credentials_dir,
+        print_result=True,
+    )
