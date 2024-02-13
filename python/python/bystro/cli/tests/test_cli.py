@@ -12,7 +12,7 @@ from bystro.cli.cli import (
     get_user,
 )
 
-from bystro.api.auth import (
+from bystro.cli.auth import (
     CachedAuth,
     SignupResponse,
     load_state,
