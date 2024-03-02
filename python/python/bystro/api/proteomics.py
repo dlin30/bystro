@@ -92,7 +92,7 @@ def upload_proteomics_dataset(
     job_payload = {
         "protein_abundance_file": Path(protein_abundance_file).name,
         "proteomics_dataset_type": proteomics_dataset_type.value,
-        "assembly": "N/A",
+        "assembly": "NA",
     }
 
     files = [_package_filename(protein_abundance_file)]
@@ -122,7 +122,7 @@ def upload_proteomics_dataset(
         if update_annotation_response.status_code == HTTP_STATUS_OK:
             final_response["annotationID"] = annotation_job_id
             if print_result:
-                annotation_name = annotation_response.json().get("inputFileName", "Unknown Annotation")
+                annotation_name = annotation_response.json().get("name", "Unknown Annotation")
                 print(
                     f'\nAnnotation "{annotation_name}" (id: {annotation_job_id}) '
                     f'was linked to this proteomics submission (id: "{proteomics_job_id}").\n'
