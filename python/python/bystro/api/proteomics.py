@@ -14,6 +14,7 @@ UPLOAD_PROTEIN_ENDPOINT = "/api/jobs/proteomics/"
 GET_ANNOTATION = "/api/jobs/:id"
 HTTP_STATUS_OK = 200
 ONE_HOUR_IN_SECONDS = 60 * 60
+FRAGPIPE_GENE_ABUNDANCE_HEADERS = ["Index", "NumberPSM", "ProteinID", "MaxPepProb", "ReferenceIntensity"]
 
 
 def _package_filename(filename: str) -> tuple[str, tuple[str, BinaryIO, str]]:
@@ -67,13 +68,13 @@ def upload_proteomics_dataset(
     if annotation_job_id is not None and not isinstance(annotation_job_id, str):
         raise ValueError("annotation job id must be a string.")
 
-    abundance_required_headers = ["Index", "NumberPSM", "ProteinID", "MaxPepProb", "ReferenceIntensity"]
     with open(protein_abundance_file, "r") as file:
         first_line = file.readline().strip().lower()
-        if not all(header.lower() in first_line for header in abundance_required_headers):
-            if print_result:
-                print("Error: The protein abundance file does not contain the required headers.")
-            return {}
+        if not all(header.lower() in first_line for header in FRAGPIPE_GENE_ABUNDANCE_HEADERS):
+            raise ValueError(
+                "The protein abundance file does not contain the expected headers: %s"
+                % FRAGPIPE_GENE_ABUNDANCE_HEADERS
+            )
 
     state, auth_header = authenticate()
     url = state.url + UPLOAD_PROTEIN_ENDPOINT
@@ -95,10 +96,7 @@ def upload_proteomics_dataset(
         "assembly": "NA",
     }
 
-    files = [_package_filename(protein_abundance_file)]
-    if experiment_annotation_file:
-        files.append(_package_filename(experiment_annotation_file))
-
+    # TODO 2024-03-04: @akotlar upload experiment file if provided, then add to job_payload the experimentName
     response = requests.post(
         url, headers=auth_header, files=files, data={"job": json.dumps(job_payload)}
     )
