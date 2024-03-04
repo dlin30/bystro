@@ -96,6 +96,7 @@ def upload_proteomics_dataset(
         "assembly": "NA",
     }
 
+    files = [_package_filename(protein_abundance_file)]
     # TODO 2024-03-04: @akotlar upload experiment file if provided, then add to job_payload the experimentName
     response = requests.post(
         url, headers=auth_header, files=files, data={"job": json.dumps(job_payload)}
